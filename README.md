@@ -10,3 +10,8 @@ of concept and gonna work more on it later.
 To use the extension on local machine,
 Enable developer mode on Chrome,
 Load unpacked and select the folder.
+
+Example:
+![Extension at work showing save and the word highlighted](image.png)
+
+![List of words user selected to save shown as a list](image-1.png)
