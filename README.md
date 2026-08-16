@@ -6,3 +6,7 @@ Exporting to CSV is an option.
 
 Generated using Qwen. I've went through the code as a proof
 of concept and gonna work more on it later.
+
+To use the extension on local machine,
+Enable developer mode on Chrome,
+Load unpacked and select the folder.
