@@ -1,0 +1,8 @@
+# Word Collector
+
+double click a word and see the translation.
+You can save the translation in your system.
+Exporting to CSV is an option.
+
+Generated using Qwen. I've went through the code as a proof
+of concept and gonna work more on it later.

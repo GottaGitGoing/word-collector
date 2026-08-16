@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Word Collector",
+  "version": "1.0.0",
+  "description": "Double-click any word to save it with its English translation.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://translate.googleapis.com/*"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["content.css"]
+    }
+  ],
+  "action": { "default_popup": "popup.html" }
+}

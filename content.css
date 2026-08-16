@@ -1,0 +1,25 @@
+.wc-tooltip {
+  position: fixed;
+  z-index: 2147483647;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 320px;
+  padding: 10px 12px;
+  background: #1e2230;
+  color: #f5f6fa;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .3);
+  font: 14px/1.4 system-ui, sans-serif;
+  text-align: left;
+}
+.wc-tooltip .wc-word { font-weight: 700; font-size: 15px; }
+.wc-tooltip .wc-translation { color: #9fd3a8; }
+.wc-tooltip .wc-actions { display: flex; gap: 6px; margin-top: 2px; }
+.wc-tooltip button {
+  border: none; border-radius: 6px; padding: 4px 10px;
+  font-size: 13px; cursor: pointer;
+}
+.wc-tooltip .wc-save { background: #3b82f6; color: #fff; }
+.wc-tooltip .wc-save:hover { background: #2f6edb; }
+.wc-tooltip .wc-cancel { background: #3a3f52; color: #cfd3e0; }
