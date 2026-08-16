@@ -21,3 +21,20 @@ async function translateToEnglish(word) {
     lang: data[2] || "auto",
   };
 }
+
+// ---------- Due-count badge ----------
+chrome.storage.onChanged.addListener(updateBadge);
+chrome.runtime.onInstalled.addListener(updateBadge);
+chrome.runtime.onStartup.addListener(updateBadge);
+
+async function updateBadge() {
+  const { words = [] } = await chrome.storage.sync.get({ words: [] });
+  const now = Date.now();
+  const due = words.filter(
+    (w) => w.box === undefined || (w.due || 0) <= now,
+  ).length;
+  await chrome.action.setBadgeText({
+    text: due ? String(Math.min(due, 99)) : "",
+  });
+  await chrome.action.setBadgeBackgroundColor({ color: "#f5a623" });
+}

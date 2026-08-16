@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Review — Word Collector</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: flex; justify-content: center;
+    background: #12141c; color: #eceef4; font: 16px/1.5 system-ui, sans-serif; }
+  main { width: min(560px, 92vw); padding: 24px 0 48px; }
+  header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  header .spacer { flex: 1; }
+  #modeLabel { font-size: 13px; color: #9aa3c0; text-transform: uppercase; letter-spacing: .08em; }
+  #progressText { font-size: 13px; color: #767e97; }
+  #closeBtn { background: none; border: none; color: #666e88; cursor: pointer; font-size: 16px; }
+  #closeBtn:hover { color: #fff; }
+  #barWrap { height: 4px; background: #232736; border-radius: 2px; overflow: hidden; margin-bottom: 28px; }
+  #progressBar { height: 100%; width: 0; background: #3b82f6; transition: width .25s; }
+
+  #card { background: #1b1f2c; border: 1px solid #2a2e3d; border-radius: 16px; padding: 40px 24px; text-align: center; }
+  #front { font-size: 34px; font-weight: 700; overflow-wrap: anywhere; }
+  #meta { margin-top: 6px; font-size: 13px; color: #767e97; }
+  #back { margin-top: 22px; padding-top: 22px; border-top: 1px dashed #2f3448; font-size: 26px; color: #9fd3a8; overflow-wrap: anywhere; }
+
+  #showBtn { margin-top: 24px; width: 100%; padding: 12px; border: none; border-radius: 10px;
+    background: #2c3145; color: #eceef4; font-size: 15px; cursor: pointer; }
+  #showBtn:hover { background: #343a52; }
+  #showBtn kbd { color: #767e97; font-size: 12px; }
+
+  #grades { display: flex; gap: 10px; margin-top: 24px; }
+  .g { flex: 1; padding: 10px 6px; border: none; border-radius: 10px; cursor: pointer;
+    display: flex; flex-direction: column; gap: 2px; align-items: center; font-size: 15px; color: #fff; }
+  .g span { font-size: 12px; opacity: .85; }
+  .g kbd { font-size: 10px; opacity: .6; }
+  .g.again { background: #b0413e; } .g.again:hover { background: #c74f4b; }
+  .g.good  { background: #2f7d4f; } .g.good:hover  { background: #38945d; }
+  .g.easy  { background: #2f6edb; } .g.easy:hover  { background: #3b7ff0; }
+
+  .panel { background: #1b1f2c; border: 1px solid #2a2e3d; border-radius: 16px; padding: 40px 24px; text-align: center; }
+  .panel .dim { color: #767e97; }
+  .panel button { margin-top: 16px; padding: 10px 18px; border: none; border-radius: 10px; background: #3b82f6; color: #fff; font-size: 15px; cursor: pointer; }
+  .panel button.secondary { background: #2c3145; margin-left: 8px; }
+  .sumGrid { display: flex; justify-content: center; gap: 36px; margin: 18px 0 6px; }
+  .sumGrid div { display: flex; flex-direction: column; }
+  .sumGrid b { font-size: 30px; }
+  .sumGrid span { font-size: 12px; color: #767e97; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <span id="modeLabel">Review</span>
+    <span class="spacer"></span>
+    <span id="progressText"></span>
+    <button id="closeBtn" title="Close">✕</button>
+  </header>
+  <div id="barWrap"><div id="progressBar"></div></div>
+
+  <section id="card" class="hidden">
+    <div id="front"></div>
+    <div id="meta"></div>
+    <div id="answer" class="hidden"><div id="back"></div></div>
+    <button id="showBtn">Show answer &nbsp;<kbd>space</kbd></button>
+    <div id="grades" class="hidden">
+      <button class="g again" id="gAgain">Again<span id="pAgain"></span><kbd>1</kbd></button>
+      <button class="g good"  id="gGood">Good<span id="pGood"></span><kbd>2</kbd></button>
+      <button class="g easy"  id="gEasy">Easy<span id="pEasy"></span><kbd>3</kbd></button>
+    </div>
+  </section>
+
+  <section id="empty" class="panel hidden">
+    <p>No words saved yet.</p>
+    <p class="dim">Double-click a word on any web page to add it to your deck.</p>
+  </section>
+
+  <section id="noDue" class="panel hidden">
+    <p>🎉 Nothing due right now.</p>
+    <button id="practiceAnyway">Practice anyway (weighted)</button>
+  </section>
+
+  <section id="summary" class="panel hidden">
+    <h2 style="margin:0">Session complete</h2>
+    <div class="sumGrid">
+      <div><b id="sumReviewed">0</b><span>reviews</span></div>
+      <div><b id="sumAcc">0%</b><span>recall accuracy</span></div>
+      <div><b id="sumAgain">0</b><span>lapses</span></div>
+    </div>
+    <button id="againBtn">Another round</button>
+    <button id="doneBtn" class="secondary">Done</button>
+  </section>
+</main>
+<script src="review.js"></script>
+</body>
+</html>

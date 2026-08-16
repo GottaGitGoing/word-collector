@@ -7,11 +7,21 @@
   header { padding: 12px; display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid #2a2e3d; }
   header h1 { margin: 0; font-size: 16px; }
   #search { padding: 6px 10px; border-radius: 8px; border: 1px solid #3a3f52; background: #1e2230; color: inherit; outline: none; }
-  #list { list-style: none; margin: 0; padding: 0; max-height: 360px; overflow-y: auto; }
+  .reviewBar { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid #2a2e3d; background: #1b1f2c; }
+  #dueInfo { font-size: 13px; color: #9aa3c0; }
+  #dueInfo b { color: #f5b04c; }
+  .reviewBar .btns { display: flex; gap: 6px; }
+  .reviewBar button { border: none; border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer; }
+  #reviewDue { background: #3b82f6; color: #fff; }
+  #practice { background: #2c3145; color: #cfd3e0; }
+  #practice:disabled { opacity: .4; cursor: default; }
+  #list { list-style: none; margin: 0; padding: 0; max-height: 340px; overflow-y: auto; }
   .item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; }
   .item:hover { background: #1e2230; }
   .item .word { font-weight: 600; min-width: 80px; }
-  .lang { font-size: 10px; background: #2c3145; color: #9aa3c0; border-radius: 4px; padding: 1px 5px; margin-left: 6px; }
+  .lang, .box { font-size: 10px; border-radius: 4px; padding: 1px 5px; margin-left: 6px; }
+  .lang { background: #2c3145; color: #9aa3c0; }
+  .box { background: #1d3a2a; color: #7fc99a; }
   .item .translation { flex: 1; color: #9fd3a8; overflow-wrap: anywhere; }
   .item .delete { background: none; border: none; color: #666e88; cursor: pointer; }
   .item .delete:hover { color: #ff6b6b; }
@@ -26,6 +36,13 @@
     <h1>📖 My Words</h1>
     <input id="search" type="search" placeholder="Search…">
   </header>
+  <div class="reviewBar">
+    <span id="dueInfo"><b>0</b> due</span>
+    <div class="btns">
+      <button id="reviewDue">Review</button>
+      <button id="practice">Practice</button>
+    </div>
+  </div>
   <ul id="list"></ul>
   <footer>
     <button id="export">Export CSV</button>
