@@ -1,0 +1,283 @@
+
+Data flows:
+1. **Save:** dblclick → tooltip → background translates → `storage.sync` write.
+2. **Review:** popup → new tab `review.html` → grades written back per card.
+3. **Highlight:** `storage.onChanged` → rebuild word map/regex → wrap text nodes.
+
+---
+
+## ADR-001: Manifest V3 with a service worker background
+
+**Status:** Accepted
+
+**Context.** Chrome requires MV3 for new/updated extensions. MV3 replaces the persistent
+background page with an ephemeral service worker, which can hold no durable in-memory state.
+
+**Decision.** Use MV3. All state lives in `chrome.storage`; the service worker is stateless
+and only mediates translation fetches and the due-count badge.
+
+**Consequences.**
+- (+) Forward-compatible with Chrome Web Store requirements.
+- (+) Stateless worker is trivially resilient to idle shutdowns.
+- (−) No long-lived background logic; anything scheduled in the future (e.g. daily review
+  reminders) must use `chrome.alarms`, not timers.
+
+---
+
+## ADR-002: Word capture via `dblclick` + Selection API
+
+**Status:** Accepted
+
+**Context.** Needed a capture gesture that works on any page without setup.
+
+**Alternatives considered.**
+- Context menu: explicit, but two extra interactions per word; friction kills a
+  vocabulary habit.
+- Selection-change listener: fires constantly, noisy, no clear "commit" moment.
+
+**Decision.** Listen for `dblclick`, read `window.getSelection()`, clean the token
+(strip punctuation, keep Unicode letters/marks), reject multi-word selections.
+
+**Consequences.**
+- (+) Natural gesture; event provides cursor coordinates for tooltip placement.
+- (+) Works on any rendered text, no page cooperation needed.
+- (−) Conflicts mildly with users who double-click to select text for copying — mitigated
+  by requiring explicit "Save" click and offering Cancel/Escape/click-away dismissal.
+- (−) Cannot capture words split across inline elements (rare; acceptable).
+
+---
+
+## ADR-003: Translation performed in the service worker, not the content script
+
+**Status:** Accepted
+
+**Context.** Since Chrome 85, content-script fetches are subject to the host page's CORS
+policy; extension `host_permissions` do not apply to content scripts.
+
+**Decision.** Content script sends `{type:'translate', word}` via `runtime.sendMessage`;
+the service worker performs the fetch and responds asynchronously (`return true` keeps the
+message channel open).
+
+**Consequences.**
+- (+) Cross-origin fetch works with a single `host_permissions` entry.
+- (+) Provider logic (timeouts, fallback chain) is centralized in one file — swapping or
+  adding providers touches only `background.js`.
+- (−) Extra message hop; negligible latency vs. the network call itself.
+- (−) If the extension is reloaded while a tab is open, the old content script's context is
+  invalidated and messaging throws. Content script catches this and shows an explicit
+  "reload this page" message instead of hanging (learned from a real bug report).
+
+---
+
+## ADR-004: Google Translate `gtx` endpoint primary, MyMemory fallback
+
+**Status:** Accepted (with known risk)
+
+**Context.** The core requirement is *auto-detected source language → English*: the user
+reads pages in multiple languages, so the provider must detect the language itself.
+Constraints: no API key, no backend, free.
+
+**Alternatives considered.**
+- DeepL / OpenAI: best quality, but require an API key and per-call cost — rejected as the
+  default for a zero-setup personal tool.
+- MyMemory alone: reliable and keyless, but source language must be specified — fails the
+  auto-detect requirement as a primary.
+- Lingva instances: unstable third-party mirrors — rejected.
+
+**Decision.** Primary: `translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en`.
+Fallback: MyMemory with a user-configured source language. 8-second `AbortController`
+timeout; failures are surfaced in the tooltip with the actual error, never silent.
+
+**Consequences.**
+- (+) Zero setup, auto-detection, returns detected language code (stored per word, reused
+  in UI).
+- (−) The `gtx` endpoint is unofficial: it can return HTTP 429 or be blocked per IP/region.
+  This is the single biggest reliability risk in the system. Mitigations in place: fallback
+  provider, timeout, visible error text. Documented migration path: swap in DeepL with a key.
+
+---
+
+## ADR-005: `chrome.storage.sync`, single `words` array key
+
+**Status:** Accepted
+
+**Context.** Needed persistence without a backend, ideally synced across the user's devices.
+
+**Alternatives considered.**
+- IndexedDB: larger capacity, but no cross-device sync and more code.
+- `chrome.storage.local`: 10 MB, but no sync — vocabulary lists are exactly the kind of
+  small, high-value data sync is designed for.
+- One storage key per word: avoids read-modify-write of the whole array, but quota
+  (max ~512 keys) and enumeration become awkward.
+
+**Decision.** One array under key `words`, accessed directly from content scripts (the
+storage API is available to them — no message passing needed for persistence).
+
+**Consequences.**
+- (+) Simple atomic reads/writes; whole list available in one `get`.
+- (+) Review tab and reading tab stay in sync live via `storage.onChanged` (highlight
+  recoloring, popup counts, badge).
+- (−) Total quota ~100 KB (~500–1000 entries). Acceptable for personal use; documented
+  switch to `chrome.storage.local` or key-chunking if the list grows.
+- (−) Theoretical read-modify-write races (save in a tab while grading in another). In
+  practice writes are user-gesture paced; risk accepted.
+
+---
+
+## ADR-006: Explicit save confirmation, no auto-save
+
+**Status:** Accepted
+
+**Context.** Double-click is an ambiguous gesture (also used for text selection), and
+machine translations are sometimes wrong.
+
+**Decision.** Double-click shows the translation preview; the word is stored only after
+the user clicks "Save". Duplicates are detected (word + translation) and reported inline.
+
+**Consequences.**
+- (+) No list pollution from accidental double-clicks.
+- (+) User sees and implicitly vets the translation before committing it.
+- (−) One extra click per word — judged worthwhile; could be made optional later.
+
+---
+
+## ADR-007: Review session in a new tab, not the popup
+
+**Status:** Accepted
+
+**Context.** Flashcards need sustained focus: reveal → recall → grade, often with keyboard
+shortcuts.
+
+**Alternatives considered.** Popup is convenient but closes on blur — a study session
+would die the moment the user clicks elsewhere or checks another tab.
+
+**Decision.** `review.html` opened via `chrome.tabs.create({url: chrome.runtime.getURL(...)})`.
+Popup only hosts the entry point (due count, Review/Practice buttons).
+
+**Consequences.**
+- (+) Full viewport, persistent session, keyboard shortcuts (Space, 1/2/3).
+- (+) No new manifest permissions needed — extension pages opened by the extension are
+  unrestricted.
+- (+) Grading writes propagate to other tabs live (highlights recolor while studying).
+- (−) Slightly heavier interaction (new tab) than an inline popup card.
+
+---
+
+## ADR-008: Leitner boxes + weights, not SM-2, for scheduling
+
+**Status:** Accepted
+
+**Context.** Requirement was a *weighted* review system with *recall reinforcement*.
+Anki-style SM-2 (ease factors, multiplicative intervals) was considered.
+
+**Decision.** Hybrid model:
+- **Leitner boxes 1–6** with fixed intervals (10 min, 1, 3, 7, 14, 30 days). `Again` →
+  box 1; `Good` → +1 box; `Easy` → +2 boxes with ×1.3 interval and slight fuzz.
+- **Weight** (0.25–20) per card: ×2+0.5 on fail, ×0.75/×0.5 on success. Drives due-queue
+  ordering (hardest first).
+- **Recall reinforcement** at two timescales: failed cards are re-inserted ~3 positions
+  later in the *current* session (max 3 retries); weights bias *future* sessions.
+- **Practice mode**: weighted sampling without replacement (Efraimidis–Spirakis,
+  `key = rand^(1/weight)`) over the whole deck — weak words statistically dominate even
+  when nothing is due.
+
+**Alternatives rejected.** SM-2: more state per card, opaque ease-factor drift, no benefit
+at personal-vocabulary scale. Pure random review: ignores the "weighted" requirement.
+
+**Consequences.**
+- (+) Box number is human-readable — displayed as `B1`–`B6` badges and mapped directly to
+  highlight colors (the mastery visualization depends on this coarse scale).
+- (+) Three-button grading keeps sessions fast; intervals are tunable in one constant.
+- (−) Coarser scheduling than SM-2 for very large decks — acceptable at this scale.
+
+---
+
+## ADR-009: Lazy schema migration — cards without `box` are "new"
+
+**Status:** Accepted
+
+**Context.** The SRS feature shipped after users had already saved words. A one-off data
+migration in an extension is awkward (no reliable "run once on update" hook across all
+clients).
+
+**Decision.** Review fields (`box`, `weight`, `due`, `correct`, `wrong`) are optional.
+`box === undefined` means "new card". All consumers (queue builder, badge, popup,
+highlights) share this convention.
+
+**Consequences.**
+- (+) Zero migration risk; old and new data coexist; the convention survives storage sync
+  across devices regardless of which device updates first.
+- (−) The `isNew` check is duplicated in several places — must stay consistent. Accepted;
+  it's a two-line convention.
+
+---
+
+## ADR-010: Highlights via text-node wrapping with TreeWalker + one regex
+
+**Status:** Accepted
+
+**Context.** Saved words must be highlighted by mastery level without breaking the host
+page (layout, scripts, event handlers, selections).
+
+**Alternatives considered.**
+- `innerHTML` rewriting: fast but destroys event handlers and re-parses markup — rejected.
+- CSS Custom Highlight API (`::highlight`): elegant and non-mutating, but per-range styling
+  by mastery level and hover tooltips are limited; wrapping gives both for free.
+
+**Decision.**
+- One regex built from all saved words, longest-first, with Unicode word boundaries
+  (`(?<![\p{L}\p{M}])…(?![\p{L}\p{M}])`), case-insensitive.
+- TreeWalker collects text nodes, skipping `script/style/code/pre/contenteditable/iframe`
+  and our own spans; matches are wrapped in `span.wc-hl.wc-m{0..6}` with a `title` tooltip.
+- `MutationObserver` rescans only newly added subtrees (infinite scroll, SPAs), debounced
+  250 ms, and explicitly ignores self-caused mutations (no feedback loop).
+- `storage.onChanged` (debounced 300 ms) triggers unwrap + rescan, so grading in the
+  review tab live-recolors any open reading tab.
+
+**Consequences.**
+- (+) Non-destructive; dblclick capture still works on highlighted words; the tooltip
+  "Already in your list" path naturally covers highlighted words.
+- (+) Highlight classes are pure CSS — color scheme changes without touching JS.
+- (−) Exact match only: inflections (`fui` vs `ir`) and plurals don't match. Stemming
+  requires per-language support — deferred.
+- (−) Shadow DOM subtrees and cross-origin iframes are not scanned (`all_frames: true`
+  would cover same-origin iframes; Shadow DOM would need per-root attach).
+- (−) DOM size grows slightly on word-dense pages; acceptable.
+
+---
+
+## ADR-011: Page-derived data never passes through `innerHTML`
+
+**Status:** Accepted
+
+**Context.** The extension renders text scraped from arbitrary web pages (words,
+translations) inside tooltips, the popup list, and review cards. That is untrusted input.
+
+**Decision.** All user/page-derived strings are rendered via `textContent` / DOM APIs.
+`innerHTML` is used only for static, hardcoded markup (tooltip skeleton). CSV export
+escapes quotes.
+
+**Consequences.**
+- (+) No XSS path from a malicious page through saved words into extension surfaces.
+- (−) Slightly more verbose DOM-building code in popup/review rendering.
+
+---
+
+## ADR-012: Plain JavaScript, no build step, no framework
+
+**Status:** Accepted
+
+**Context.** Personal tool, small surface area, installed via "Load unpacked".
+
+**Decision.** No bundler, no framework, no tests (yet). Each concern lives in one small
+file (`content.js` capture, `highlight.js` highlighting, `background.js` providers,
+`popup.js` list, `review.js` SRS).
+
+**Consequences.**
+- (+) Installable and modifiable in minutes; no toolchain to maintain; Chrome loads it
+  directly.
+- (+) Clear file-per-concern mapping keeps the codebase navigable without framework
+  conventions.
+- (−) No type checking or automated tests — the SRS math and regex edge cases currently
+  rely on manual verification. Adding a lightweight test file for `grade()`/`buildQueue()`
+  is the natural next investment.
