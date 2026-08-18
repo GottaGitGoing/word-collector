@@ -10,6 +10,29 @@ document.addEventListener("dblclick", (e) => {
   showTooltip(word, e.clientX, e.clientY);
 });
 
+// --- Highlight with mouse (Click & Drag) ---
+document.addEventListener("mouseup", (e) => {
+  // Don't trigger if clicking inside the tooltip itself
+  if (tooltip && tooltip.contains(e.target)) return;
+
+  // A tiny delay is required so the browser finishes updating the selection
+  setTimeout(() => {
+    const sel = window.getSelection();
+
+    // If nothing is highlighted (just a normal click), do nothing
+    if (!sel || sel.isCollapsed) return;
+
+    const raw = sel.toString();
+    const word = cleanWord(raw);
+
+    // Keep the same rules: not empty, not too long, not only single words in this case
+    if (!word || word.length > 45) return;
+    // || /\s/.test(word))
+
+    showTooltip(word, e.clientX, e.clientY);
+  }, 10);
+});
+
 document.addEventListener("mousedown", (e) => {
   if (tooltip && !tooltip.contains(e.target)) removeTooltip();
 });
