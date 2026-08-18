@@ -6,7 +6,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return true; // keep channel open for the async response
 });
 
-async function translateToEnglish(word) {
+async function googleTranslate(word) {
   const url =
     "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q=" +
     encodeURIComponent(word);
@@ -20,6 +20,15 @@ async function translateToEnglish(word) {
       .trim(),
     lang: data[2] || "auto",
   };
+}
+
+async function translateToEnglish(word) {
+  try {
+    return await googleTranslate(word);
+  } catch (e) {
+    console.warn("Google failed, trying MyMemory:", e);
+    return await myMemory(word);
+  }
 }
 
 // ---------- Due-count badge ----------
@@ -37,4 +46,17 @@ async function updateBadge() {
     text: due ? String(Math.min(due, 99)) : "",
   });
   await chrome.action.setBadgeBackgroundColor({ color: "#f5a623" });
+}
+
+// Set your source language: es, fr, de, tr, pt, ja, ...
+const SOURCE_LANG = "fr";
+
+async function myMemory(word) {
+  const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(word)}&langpair=${SOURCE_LANG}|en`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  const data = await res.json();
+  if (data.responseStatus !== 200)
+    throw new Error(data.responseDetails || "MyMemory error");
+  return { translation: data.responseData.translatedText, lang: SOURCE_LANG };
 }
