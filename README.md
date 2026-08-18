@@ -21,3 +21,6 @@ Example:
 Words you encountered will highlighted based on your mastery level
 
 ![words saved previously are highlighted on the page](image-2.png)
+
+Ability to change auto-detect language to your language of choice
+![Dropdown showing languages to override translation autodetection](image-3.png)
