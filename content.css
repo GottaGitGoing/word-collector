@@ -23,3 +23,14 @@
 .wc-tooltip .wc-save { background: #3b82f6; color: #fff; }
 .wc-tooltip .wc-save:hover { background: #2f6edb; }
 .wc-tooltip .wc-cancel { background: #3a3f52; color: #cfd3e0; }
+
+/* ---- mastery highlights ---- */
+span.wc-hl { border-radius: 3px; padding: 0 1px; cursor: pointer; }
+
+.wc-m0 { background: rgba(245, 158, 11, .30); border-bottom: 2px dotted #f59e0b; } /* new, never reviewed */
+.wc-m1 { background: rgba(239, 68, 68,  .28); border-bottom: 2px solid #ef4444; }   /* box 1 */
+.wc-m2 { background: rgba(249, 115, 22, .26); border-bottom: 2px solid #f97316; }   /* box 2 */
+.wc-m3 { background: rgba(234, 179, 8,  .24); border-bottom: 2px solid #eab308; }   /* box 3 */
+.wc-m4 { background: rgba(132, 204, 22, .20); border-bottom: 2px solid #84cc16; }   /* box 4 */
+.wc-m5 { background: rgba(34, 197, 94,  .18); border-bottom: 2px solid #22c55e; }   /* box 5 */
+.wc-m6 { background: rgba(59, 130, 246, .10); border-bottom: 2px solid rgba(59, 130, 246, .4); } /* mastered */

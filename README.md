@@ -15,3 +15,9 @@ Example:
 ![Extension at work showing save and the word highlighted](image.png)
 
 ![List of words user selected to save shown as a list](image-1.png)
+
+## Features
+
+Words you encountered will highlighted based on your mastery level
+
+![words saved previously are highlighted on the page](image-2.png)
