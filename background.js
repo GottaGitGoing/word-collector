@@ -1,3 +1,4 @@
+// ========== Translation API ==========
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type !== "translate") return;
   translateToEnglish(msg.word, msg.from)
@@ -6,7 +7,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       console.warn("[Word Collector] translation failed:", err);
       sendResponse({ ok: false, error: err?.message || String(err) });
     });
-  return true; // keep channel open for async respn?
+  return true; // keep channel open for async response
 });
 
 async function googleTranslate(word, from) {
@@ -33,19 +34,31 @@ async function googleTranslate(word, from) {
   }
 }
 
+// Set your source language: es, fr, de, tr, pt, ja, ...
+const SOURCE_LANG = "fr";
+
+// FIX 1: Added 'from' parameter here
+async function myMemory(word, from) {
+  const src = from && from !== "auto" ? from : SOURCE_LANG;
+  const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(word)}&langpair=${src}|en`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  const data = await res.json();
+  if (data.responseStatus !== 200)
+    throw new Error(data.responseDetails || "MyMemory error");
+  return { translation: data.responseData.translatedText, lang: src };
+}
+
 async function translateToEnglish(word, from) {
   try {
     return await googleTranslate(word, from);
   } catch (e) {
-    if (typeof myMemory === "function") {
-      console.warn("[Word Collector] Google failed, trying MyMemory:", e);
-      return await myMemory(word, from);
-    }
-    throw e;
+    console.warn("[Word Collector] Google failed, trying MyMemory:", e);
+    return await myMemory(word, from);
   }
 }
 
-// ---------- Due-count badge ----------
+// ========== Due-count badge ==========
 chrome.storage.onChanged.addListener(updateBadge);
 chrome.runtime.onInstalled.addListener(updateBadge);
 chrome.runtime.onStartup.addListener(updateBadge);
@@ -62,21 +75,7 @@ async function updateBadge() {
   await chrome.action.setBadgeBackgroundColor({ color: "#f5a623" });
 }
 
-// Set your source language: es, fr, de, tr, pt, ja, ...
-const SOURCE_LANG = "fr";
-
-async function myMemory(word) {
-  const src = from && from !== "auto" ? from : SOURCE_LANG;
-  const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(word)}&langpair=${src}|en`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error("HTTP " + res.status);
-  const data = await res.json();
-  if (data.responseStatus !== 200)
-    throw new Error(data.responseDetails || "MyMemory error");
-  return { translation: data.responseData.translatedText, lang: src };
-}
-
-// ---------- Clipboard hotkey ----------
+// ========== Clipboard hotkey UI Helpers ==========
 function flashBadge(text) {
   chrome.action.setBadgeBackgroundColor({ color: "#2f7d4f" });
   chrome.action.setBadgeText({ text });
@@ -97,25 +96,69 @@ function notify(title, message) {
   );
 }
 
-// ---------- Clipboard Hotkey (Alt+S) ----------
+// ========== Clipboard Hotkey (Alt+S) ==========
 chrome.commands.onCommand.addListener(async (command) => {
   console.log("[Word Collector] command received:", command);
   if (command !== "save-clipboard") return;
 
+  // FIX 2: Wrapped the ENTIRE hotkey logic in a single try/catch block
+  // so we don't get the unmatched catch syntax error.
   try {
-    // 1. Get the active tab (the one the user is currently looking at)
-    const [tab] = await chrome.tabs.query({
+    // 1. Robustly get the active tab (fallback handles the global hotkey "blur" effect)
+    let tab = null;
+    let tabs = await chrome.tabs.query({
       active: true,
-      currentWindow: true,
+      lastFocusedWindow: true,
     });
+    tab = tabs[0];
+
+    if (!tab) {
+      const lastWindow = await chrome.windows.getLastFocused({
+        populate: true,
+      });
+      if (lastWindow?.tabs) tab = lastWindow.tabs.find((t) => t.active);
+    }
+
+    if (!tab) {
+      const allActiveTabs = await chrome.tabs.query({ active: true });
+      tab = allActiveTabs[0];
+    }
+
+    if (!tab) {
+      const allWindows = await chrome.windows.getAll({ populate: true });
+      if (allWindows.length > 0 && allWindows[0].tabs.length > 0) {
+        tab = allWindows[0].tabs[0];
+      }
+    }
+
     if (!tab) {
       flashBadge("!");
-      notify("Word Collector", "No active tab found.");
+      notify(
+        "Word Collector",
+        "Could not find an active tab. (Are you in Incognito?)",
+      );
+      console.error("[Word Collector] All tab finding methods failed.");
+      return;
+    }
+
+    console.log("[Word Collector] Found tab ID:", tab.id, "URL:", tab.url);
+
+    // Prevent injecting into browser settings pages
+    if (
+      tab.url &&
+      (tab.url.startsWith("chrome://") ||
+        tab.url.startsWith("chrome-extension://") ||
+        tab.url.startsWith("edge://"))
+    ) {
+      flashBadge("!");
+      notify(
+        "Word Collector",
+        "Cannot use hotkey on browser settings pages. Use the popup instead.",
+      );
       return;
     }
 
     // 2. Inject a temporary script into the active tab to read the clipboard.
-    // Because the user is actively on this tab, it has "focus" and can read the clipboard.
     const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: async () => {
