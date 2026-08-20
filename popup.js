@@ -252,3 +252,55 @@ document.getElementById("export").addEventListener("click", () => {
   a.click();
   URL.revokeObjectURL(a.href);
 });
+
+// for cliboard
+document.getElementById("clipBtn").addEventListener("click", async () => {
+  const btn = document.getElementById("clipBtn");
+  btn.textContent = "Reading...";
+  btn.disabled = true;
+
+  try {
+    const text = await navigator.clipboard.readText();
+    // Same regex as content.js to clean the word
+    const word = text
+      .trim()
+      .replace(/[^\p{L}\p{M}'’\-]/gu, "")
+      .replace(/^['’\-]+|['’\-]+$/g, "");
+
+    if (!word || /\s/.test(word)) {
+      alert("Please copy a single word to your clipboard first.");
+      return;
+    }
+
+    btn.textContent = "Translating...";
+    const res = await chrome.runtime.sendMessage({ type: "translate", word });
+    if (!res?.ok) {
+      alert("Translation failed: " + (res.error || "Unknown error"));
+      return;
+    }
+    // can switch this around. first check then pay the translation cost...? no?
+    const { words = [] } = await chrome.storage.sync.get({ words: [] });
+    if (words.some((w) => w.word.toLowerCase() === word.toLowerCase())) {
+      alert("This word is already in your list!");
+      return;
+    }
+
+    words.unshift({
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      word,
+      translation: res.translation,
+      lang: res.lang,
+      url: "clipboard",
+      savedAt: new Date().toISOString(),
+    });
+
+    await chrome.storage.sync.set({ words });
+    alert(`Saved: ${word} → ${res.translation}`);
+  } catch (e) {
+    console.error(e);
+    alert("Could not read clipboard. Make sure you have copied text (Ctrl+C).");
+  } finally {
+    btn.textContent = "📋 Save from Clipboard";
+    btn.disabled = false;
+  }
+});

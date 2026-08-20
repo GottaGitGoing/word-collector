@@ -75,3 +75,101 @@ async function myMemory(word) {
     throw new Error(data.responseDetails || "MyMemory error");
   return { translation: data.responseData.translatedText, lang: src };
 }
+
+// ---------- Offscreen clipboard helper ----------
+async function ensureOffscreenDocument() {
+  if (chrome.offscreen.hasDocument) {
+    if (await chrome.offscreen.hasDocument()) return;
+  }
+  try {
+    await chrome.offscreen.createDocument({
+      url: "offscreen.html",
+      reasons: ["CLIPBOARD"],
+      justification: "Read text from the clipboard",
+    });
+  } catch (e) {
+    // Older Chrome without hasDocument(): "already created" is fine
+    if (!/single offscreen|already/i.test(String(e?.message || e))) throw e;
+  }
+}
+
+async function readClipboard() {
+  await ensureOffscreenDocument();
+  const res = await chrome.runtime.sendMessage({ type: "read-clipboard" });
+  if (!res?.ok) throw new Error(res?.error || "Clipboard read failed");
+  return res.text;
+}
+
+// ---------- Clipboard hotkey ----------
+function flashBadge(text) {
+  chrome.action.setBadgeBackgroundColor({ color: "#2f7d4f" });
+  chrome.action.setBadgeText({ text });
+  setTimeout(updateBadge, 2500); // restore due-count badge
+}
+
+function notify(title, message) {
+  chrome.notifications.create(
+    { type: "basic", iconUrl: "icon128.png", title, message },
+    () => {
+      if (chrome.runtime.lastError) {
+        console.warn(
+          "[Word Collector] notification skipped:",
+          chrome.runtime.lastError.message,
+        );
+      }
+    },
+  );
+}
+
+chrome.commands.onCommand.addListener(async (command) => {
+  console.log("[Word Collector] command received:", command);
+  if (command !== "save-clipboard") return;
+
+  try {
+    const text = await readClipboard();
+    const word = String(text)
+      .trim()
+      .replace(/[^\p{L}\p{M}'’\-]/gu, "")
+      .replace(/^['’\-]+|['’\-]+$/g, "");
+
+    if (!word || word.length > 45 || /\s/.test(word)) {
+      flashBadge("✕");
+      notify(
+        "Word Collector",
+        "No valid word in clipboard — highlight a word and press Ctrl+C first.",
+      );
+      return;
+    }
+
+    const res = await translateToEnglish(word);
+    if (!res?.translation) {
+      flashBadge("✕");
+      notify("Word Collector", "Translation failed.");
+      return;
+    }
+
+    const { words = [] } = await chrome.storage.sync.get({ words: [] });
+    if (words.some((w) => w.word.toLowerCase() === word.toLowerCase())) {
+      flashBadge("=");
+      notify("Word Collector", `"${word}" is already in your list.`);
+      return;
+    }
+
+    words.unshift({
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      word,
+      translation: res.translation,
+      lang: res.lang,
+      url: "clipboard",
+      savedAt: new Date().toISOString(),
+    });
+    await chrome.storage.sync.set({ words });
+
+    flashBadge("✓");
+    notify("Word saved!", `${word} → ${res.translation}`);
+  } catch (err) {
+    console.error("[Word Collector] hotkey save failed:", err);
+    flashBadge("!");
+    notify("Word Collector", "Could not read the clipboard.");
+  }
+});
