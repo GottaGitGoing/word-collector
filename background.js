@@ -76,30 +76,6 @@ async function myMemory(word) {
   return { translation: data.responseData.translatedText, lang: src };
 }
 
-// ---------- Offscreen clipboard helper ----------
-async function ensureOffscreenDocument() {
-  if (chrome.offscreen.hasDocument) {
-    if (await chrome.offscreen.hasDocument()) return;
-  }
-  try {
-    await chrome.offscreen.createDocument({
-      url: "offscreen.html",
-      reasons: ["CLIPBOARD"],
-      justification: "Read text from the clipboard",
-    });
-  } catch (e) {
-    // Older Chrome without hasDocument(): "already created" is fine
-    if (!/single offscreen|already/i.test(String(e?.message || e))) throw e;
-  }
-}
-
-async function readClipboard() {
-  await ensureOffscreenDocument();
-  const res = await chrome.runtime.sendMessage({ type: "read-clipboard" });
-  if (!res?.ok) throw new Error(res?.error || "Clipboard read failed");
-  return res.text;
-}
-
 // ---------- Clipboard hotkey ----------
 function flashBadge(text) {
   chrome.action.setBadgeBackgroundColor({ color: "#2f7d4f" });
@@ -121,12 +97,51 @@ function notify(title, message) {
   );
 }
 
+// ---------- Clipboard Hotkey (Alt+S) ----------
 chrome.commands.onCommand.addListener(async (command) => {
   console.log("[Word Collector] command received:", command);
   if (command !== "save-clipboard") return;
 
   try {
-    const text = await readClipboard();
+    // 1. Get the active tab (the one the user is currently looking at)
+    const [tab] = await chrome.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
+    if (!tab) {
+      flashBadge("!");
+      notify("Word Collector", "No active tab found.");
+      return;
+    }
+
+    // 2. Inject a temporary script into the active tab to read the clipboard.
+    // Because the user is actively on this tab, it has "focus" and can read the clipboard.
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: async () => {
+        try {
+          return { ok: true, text: await navigator.clipboard.readText() };
+        } catch (e) {
+          return { ok: false, error: e.message };
+        }
+      },
+    });
+
+    const clipResult = results?.[0]?.result;
+    if (!clipResult?.ok) {
+      flashBadge("!");
+      notify(
+        "Word Collector",
+        "Clipboard blocked on this page. Use the popup button instead.",
+      );
+      console.warn(
+        "[Word Collector] Clipboard read blocked:",
+        clipResult?.error,
+      );
+      return;
+    }
+
+    const text = clipResult.text;
     const word = String(text)
       .trim()
       .replace(/[^\p{L}\p{M}'’\-]/gu, "")
@@ -136,7 +151,7 @@ chrome.commands.onCommand.addListener(async (command) => {
       flashBadge("✕");
       notify(
         "Word Collector",
-        "No valid word in clipboard — highlight a word and press Ctrl+C first.",
+        "No valid word in clipboard — highlight and copy a word first.",
       );
       return;
     }
@@ -160,7 +175,7 @@ chrome.commands.onCommand.addListener(async (command) => {
       word,
       translation: res.translation,
       lang: res.lang,
-      url: "clipboard",
+      url: tab.url || "clipboard",
       savedAt: new Date().toISOString(),
     });
     await chrome.storage.sync.set({ words });
@@ -170,6 +185,6 @@ chrome.commands.onCommand.addListener(async (command) => {
   } catch (err) {
     console.error("[Word Collector] hotkey save failed:", err);
     flashBadge("!");
-    notify("Word Collector", "Could not read the clipboard.");
+    notify("Word Collector", "Hotkey save failed.");
   }
 });

@@ -3,7 +3,7 @@
   "name": "Word Collector",
   "version": "1.1.0",
   "description": "Double-click or highlight any word to save it with its English translation.",
-  "permissions": ["storage", "clipboardRead", "notifications", "offscreen"],
+  "permissions": ["storage", "clipboardRead", "notifications", "scripting", "activeTab"],
   "host_permissions": [
     "https://translate.googleapis.com/*",
     "https://api.mymemory.translated.net/*"
