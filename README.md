@@ -24,3 +24,8 @@ Words you encountered will highlighted based on your mastery level
 
 Ability to change auto-detect language to your language of choice
 ![Dropdown showing languages to override translation autodetection](image-3.png)
+
+
+8/19 feature:
+Added the ability to save words from clipboard using ALT+SHIFT+S. 
+
